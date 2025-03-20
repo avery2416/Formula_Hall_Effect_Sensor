@@ -1,0 +1,4 @@
+../Core/Src/tim_setup.c:19:6:MX_TIM2_Init	3
+../Core/Src/tim_setup.c:54:6:MX_TIM6_Init	2
+../Core/Src/tim_setup.c:79:6:TIM2_IRQHandler	1
+../Core/Src/tim_setup.c:88:6:TIM6_DAC_IRQHandler	1

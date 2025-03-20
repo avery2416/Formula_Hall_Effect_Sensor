@@ -1,0 +1,2 @@
+../Core/Src/hallEffectSensor.c:13:19:hallEffectInit	1
+../Core/Src/hallEffectSensor.c:33:6:hallEffectCalculator	2
