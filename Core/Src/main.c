@@ -65,9 +65,10 @@ UART_HandleTypeDef huart2;
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
 void SystemClock_Config(void);
-static void CAN_Config_Filter(void) __attribute__((unused));
 static void MX_USART2_UART_Init(void);
 static void MX_CAN_Init(void);
+static void CAN_Config_Filter(void);
+void CAN_Send_RPM(uint16_t rpm);
 
 /* USER CODE END PFP */
 
@@ -125,12 +126,18 @@ int main(void)
 	MX_TIM6_Init();
 	/* USER CODE BEGIN 2 */
 
-
+	// Start hall effect timer
 	if(HAL_TIM_Base_Start_IT(&htim2)!= HAL_OK) Error_Handler();
 
 	// Initialize the HallEffectSensor Structure
-	if(hallEffectInit(&hfs, 1, 1, 10, &htim2, &htim6, 1, GPIO_PIN_7)!= HAL_OK) Error_Handler();
+	if(hallEffectInit(&hfs, 1, 1, 10, &htim2, &ht im6, 1, GPIO_PIN_7)!= HAL_OK) Error_Handler();
 
+	// Start can communication
+	// Start CAN communication
+	if (HAL_CAN_Start(&hcan) != HAL_OK) Error_Handler();
+
+	// Apply the CAN filter configuration
+	CAN_Config_Filter();
 
 	/* USER CODE END 2 */
 
@@ -138,35 +145,37 @@ int main(void)
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		// Toggle an LED to show activity
-		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-//		HAL_Delay(250);
+	    // Toggle an LED to show activity
+	    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
 
-//	    GPIO_PinState hallState = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7);
-//
-//	    if (hallState == GPIO_PIN_RESET) {
-//	    	hfs.isReady = 1;
-//	    }
+	    // Check CAN status
+	    uint32_t canError = HAL_CAN_GetError(&hcan);
+	    if (canError != HAL_CAN_ERROR_NONE) {
+	        // Reset CAN if there's an error
+	        HAL_CAN_Stop(&hcan);
+	        HAL_Delay(100);
+	        HAL_CAN_Start(&hcan);
+	    }
 
- 		hallEffectCalculator(&hfs, &huart2);
+	    // Perform RPM calculation with hall effect flag
+	    hallEffectCalculator(&hfs, &huart2);
+
+	    // Transmit RPM over CAN (only if no errors)
+	    if (canError == HAL_CAN_ERROR_NONE) {
+	        CAN_Send_RPM(hfs.rpm);
+	    }
+
+	    // Delay to not flood CAN transmissions
+//	    HAL_Delay(500);
 	}
+	/* USER CODE END WHILE */
 
+	/* USER CODE BEGIN 3 */
 
-		// Check if interrupt flag is set
-//		if (hfs.isReady)
-//		{
-//			uint8_t MSG[50] = {'\0'};
-//			sprintf((char *)MSG, "Hall Sensor Detected LOW State!\r\n");
-//			HAL_UART_Transmit(&huart2, MSG, strlen((char *)MSG), 100);
-//
-//			hfs.isReady = 0;  // Clear the flag
-//		}
-		/* USER CODE END WHILE */
-
-		/* USER CODE BEGIN 3 */
-//	}
-  /* USER CODE END 3 */
+	/* USER CODE END 3 */
 }
+
+/* USER CODE BEGIN 4 */
 
 /**
   * @brief System Clock Configuration
@@ -202,53 +211,12 @@ void SystemClock_Config(void)
 	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
 	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-	{
-		Error_Handler();
-	}
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) Error_Handler();
+
 	PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2;
-		PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
-	if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-	{
-		Error_Handler();
-	}
-}
+	PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
 
-/**
-  * @brief CAN Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_CAN_Init(void)
-{
-
-	/* USER CODE BEGIN CAN_Init 0 */
-
-	/* USER CODE END CAN_Init 0 */
-
-	/* USER CODE BEGIN CAN_Init 1 */
-
-	/* USER CODE END CAN_Init 1 */
-	hcan.Instance = CAN;
-	hcan.Init.Prescaler = 16;
-	hcan.Init.Mode = CAN_MODE_NORMAL;
-	hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-	hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
-	hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
-	hcan.Init.TimeTriggeredMode = DISABLE;
-	hcan.Init.AutoBusOff = DISABLE;
-	hcan.Init.AutoWakeUp = DISABLE;
-	hcan.Init.AutoRetransmission = DISABLE;
-	hcan.Init.ReceiveFifoLocked = DISABLE;
-	hcan.Init.TransmitFifoPriority = DISABLE;
-	if (HAL_CAN_Init(&hcan) != HAL_OK)
-	{
-		Error_Handler();
-	}
-	/* USER CODE BEGIN CAN_Init 2 */
-
-	/* USER CODE END CAN_Init 2 */
-
+	if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) Error_Handler();
 }
 
 /**
@@ -276,10 +244,8 @@ static void MX_USART2_UART_Init(void)
 	huart2.Init.OverSampling = UART_OVERSAMPLING_16;
 	huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
 	huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-	if (HAL_UART_Init(&huart2) != HAL_OK)
-	{
-		Error_Handler();
-	}
+
+	if (HAL_UART_Init(&huart2) != HAL_OK) Error_Handler();
 	/* USER CODE BEGIN USART2_Init 2 */
 
 	/* USER CODE END USART2_Init 2 */
@@ -287,13 +253,43 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
-  * @brief GPIO Initialization Function
+  * @brief CAN Initialization Function
   * @param None
   * @retval None
   */
+static void MX_CAN_Init(void)
+{
 
+	/* USER CODE BEGIN CAN_Init 0 */
 
-/* USER CODE BEGIN 4 */
+	/* USER CODE END CAN_Init 0 */
+
+	/* USER CODE BEGIN CAN_Init 1 */
+
+	/* USER CODE END CAN_Init 1 */
+	hcan.Instance = CAN;
+	hcan.Init.Prescaler = 4;
+	hcan.Init.Mode = CAN_MODE_NORMAL;
+	hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
+	hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
+	hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
+	hcan.Init.TimeTriggeredMode = DISABLE;
+	hcan.Init.AutoBusOff = ENABLE;
+	hcan.Init.AutoWakeUp = ENABLE;
+	hcan.Init.AutoRetransmission = ENABLE;
+	hcan.Init.ReceiveFifoLocked = DISABLE;
+	hcan.Init.TransmitFifoPriority = DISABLE;
+
+	if (HAL_CAN_Init(&hcan) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	/* USER CODE BEGIN CAN_Init 2 */
+
+	/* USER CODE END CAN_Init 2 */
+
+}
+
 /**
   * @brief  Configures the CAN.
   * @param  None
@@ -310,14 +306,41 @@ static void CAN_Config_Filter(void)
 	FilterConfig.FilterMaskIdLow = 0x0000;
 	FilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
 	FilterConfig.FilterActivation = ENABLE;
-	FilterConfig.SlaveStartFilterBank = 14;
+//	FilterConfig.SlaveStartFilterBank = 14;
 
-	if (HAL_CAN_ConfigFilter(&CanHandle, &FilterConfig) != HAL_OK)
-	{
-	/* Filter configuration Error */
-		Error_Handler();
-	}
+	if (HAL_CAN_ConfigFilter(&hcan, &FilterConfig) != HAL_OK) Error_Handler();
 }
+
+/**
+  * @brief  Prepares RPM data for CAN transmission.
+  * @param  uint16_t rpm
+  * @retval None
+  */
+void CAN_Send_RPM(uint16_t rpm) {
+    CAN_TxHeaderTypeDef TxHeader;
+    uint8_t CanTX[8];
+    uint32_t CanMailbox;
+
+    TxHeader.StdId = 0x123;         // CAN ID
+    TxHeader.ExtId = 0;
+    TxHeader.IDE = CAN_ID_STD;      // Standard ID
+    TxHeader.RTR = CAN_RTR_DATA;    // Data frame
+    TxHeader.DLC = 2;               // 2 bytes for RPM
+    TxHeader.TransmitGlobalTime = DISABLE;
+
+    // Pack RPM into 2 bytes
+    CanTX[0] = (uint8_t)(rpm >> 8);    // MSB
+    CanTX[1] = (uint8_t)(rpm & 0xFF);  // LSB
+
+    // Check if there's a free mailbox before trying to send
+    if (HAL_CAN_GetTxMailboxesFreeLevel(&hcan) > 0) {
+        // Only try to send if mailbox is available
+        HAL_CAN_AddTxMessage(&hcan, &TxHeader, CanTX, &CanMailbox);
+        // Note: Not checking return value to avoid Error_Handler
+    }
+    // Simply return if no mailbox is available, we'll try again in the next cycle
+}
+
 
 /* USER CODE END 4 */
 

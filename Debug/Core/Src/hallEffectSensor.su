@@ -1,2 +1,2 @@
 ../Core/Src/hallEffectSensor.c:13:19:hallEffectInit	40	static
-../Core/Src/hallEffectSensor.c:33:6:hallEffectCalculator	152	static
+../Core/Src/hallEffectSensor.c:33:6:hallEffectCalculator	144	static

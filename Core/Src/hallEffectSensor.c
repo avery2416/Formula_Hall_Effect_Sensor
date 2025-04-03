@@ -45,10 +45,16 @@ void hallEffectCalculator(hallEffectSensor *_hf, UART_HandleTypeDef *huart){
 		uint8_t MSG[100] = {'\0'};
 
 		// ✅ Use %u for uint16_t RPM and %lu for uint32_t delta_time
-		sprintf((char *)MSG, "RPM: %u, Wheel Speed: %.2f m/s, Delta Time: %lu\r\n",
-		        (uint16_t)_hf->rpm,                // Cast to uint16_t
-		        (float)_hf->wheel_speed,           // Cast to float
-		        (uint32_t)delta_time);             // Cast to uint32_t
+//		sprintf((char *)MSG, "RPM: %u, Wheel Speed: %.2f m/s, Delta Time: %lu\r\n",
+//		        (uint16_t)_hf->rpm,                // Cast to uint16_t
+//		        (float)_hf->wheel_speed,           // Cast to float
+//		        (uint32_t)delta_time);             // Cast to uint32_t
+
+		int speed_int = (int)(_hf->wheel_speed * 100); // Multiply by 100 for 2 decimal places
+		sprintf((char *)MSG, "RPM: %u,\t Wheel Speed: %d.%02d m/s,\t Delta Time: %lu\r\n",
+		        (uint16_t)_hf->rpm,
+		        speed_int / 100, speed_int % 100,
+		        (uint32_t)delta_time);
 
 		HAL_UART_Transmit(huart, MSG, strlen((char *)MSG), 100);
 	}

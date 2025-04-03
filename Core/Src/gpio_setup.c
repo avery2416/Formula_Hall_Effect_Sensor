@@ -41,6 +41,14 @@ void MX_GPIO_Init(void)
     GPIO_InitStruct.Pull = GPIO_PULLUP;           // Enable pull-up
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
+    /* Configure CAN pins: PA11 (CAN_RX) and PA12 (CAN_TX) */
+    GPIO_InitStruct.Pin = GPIO_PIN_11 | GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF9_CAN; // Set the alternate function for CAN
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
 	/* Enable and set EXTI line interrupt priority */
 	HAL_NVIC_SetPriority(EXTI9_5_IRQn, 2, 0);     // Interrupt priority
 	HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);             // Enable EXTI interrupt
